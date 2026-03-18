@@ -1,34 +1,80 @@
-import { useEffect, useState } from "react";
+import {
+    createContext,
+    useEffect,
+    useState,
+    ReactNode,
+    useCallback,
+} from "react";
 import menuSections from "../constants/menuSections";
 import useBoolean from "../hooks/useBoolean";
 import useScreenSize from "../hooks/useScreenSize";
 import { useRouter } from "next/router";
+import { MenuSecao } from "../models/MenuSection";
 
-const MenuProvider = () => {
+type MenuContextType = {
+    sections: MenuSecao[];
+    mini: boolean;
+    toggleMini: () => void;
+    handleChangeSection: (section: MenuSecao) => void;
+};
+
+export const ContextMenu = createContext<MenuContextType | null>(null);
+
+type Props = {
+    children: ReactNode;
+};
+
+const MenuProvider = ({ children }: Props) => {
     const [mini, toggleMini, miniTrue] = useBoolean(false);
-    const [sections, setSections] = useState(menuSections);
+    const [sections, setSections] = useState<MenuSecao[]>(menuSections);
     const screenSize = useScreenSize();
     const router = useRouter();
 
-    
+    const selectItem = useCallback(
+        (url: string) => {
+            return sections.map((section) => {
+                const newItems = section.items.map((item) => ({
+                    ...item,
+                    selected: item.url === url,
+                }));
+                return { ...section, items: newItems };
+            });
+        },
+        [sections]
+    );
+
+    const handleChangeSection = (selectedSection: MenuSecao) => {
+        setSections((prev) =>
+            prev.map((section) =>
+                section.title === selectedSection.title
+                    ? { ...section, open: !section.open }
+                    : section
+            )
+        );
+    };
 
     useEffect(() => {
-        if (screenSize === "md" || screenSize == "sm") {
+        if ((screenSize === "md" || screenSize === "sm") && !mini) {
             miniTrue();
         }
-    }, [screenSize]);
+    }, [screenSize, mini, miniTrue]);
 
-    const selectItem = (url: string) => {
-        const newSections = sections.map((section) => {
-            const newItems = section.items.map((item) => {
-                return {...item, selected: item.url === url}
-            })
-            return {...section, items: newItems}
-        })
-        return newSections
-    }
+    useEffect(() => {
+        setSections(selectItem(router.asPath));
+    }, [router.asPath, selectItem]);
 
-    return <div>MenuProvider</div>;
+    const ctx: MenuContextType = {
+        sections,
+        mini,
+        toggleMini,
+        handleChangeSection,
+    };
+
+    return (
+        <ContextMenu.Provider value={ctx}>
+            {children}
+        </ContextMenu.Provider>
+    );
 };
 
 export default MenuProvider;
